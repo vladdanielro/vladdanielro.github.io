@@ -1,23 +1,44 @@
 let watchId;
 let prevPosition = null;
 let totalDistance = 0;
+let maxSpeed = 0;
+let intervalId;
+let isTracking = false;
 
 document.getElementById("start").addEventListener("click", () => {
+  if (isTracking) {
+    stopTracking();
+  } else {
+    startTracking();
+  }
+});
+
+function startTracking() {
   if ("geolocation" in navigator) {
     watchId = navigator.geolocation.watchPosition(
       updatePosition,
       err => alert("Eroare la localizare: " + err.message),
       { enableHighAccuracy: true }
     );
+    document.getElementById("start").textContent = "Stop";
+    isTracking = true;
   } else {
     alert("Geolocația nu este suportată de browser.");
   }
-});
+}
+
+function stopTracking() {
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  document.getElementById("start").textContent = "Start";
+  isTracking = false;
+}
 
 function updatePosition(position) {
   const { latitude, longitude, speed } = position.coords;
   document.getElementById("coords").textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-
 
   if (prevPosition) {
     const d = getDistanceFromLatLonInKm(
@@ -30,14 +51,34 @@ function updatePosition(position) {
   }
   prevPosition = { latitude, longitude };
 
+  if (speed > maxSpeed) {
+    maxSpeed = speed;
+  }
 
   const kmh = speed ? (speed * 3.6).toFixed(1) : "0";
   document.getElementById("speed").textContent = kmh;
   document.getElementById("distance").textContent = totalDistance.toFixed(2);
+  document.getElementById("vma").textContent = (maxSpeed * 3.6).toFixed(1);
+
+  smoothUpdateSpeed(kmh);
+}
+
+function smoothUpdateSpeed(targetSpeed) {
+  clearInterval(intervalId);
+  let currentSpeed = parseFloat(document.getElementById("speed").textContent);
+  let step = (targetSpeed - currentSpeed) / 10;
+  intervalId = setInterval(() => {
+    currentSpeed += step;
+    if (Math.abs(currentSpeed - targetSpeed) < 0.1) {
+      currentSpeed = targetSpeed;
+      clearInterval(intervalId);
+    }
+    document.getElementById("speed").textContent = currentSpeed.toFixed(1);
+  }, 200);
 }
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // km
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a =
@@ -52,7 +93,6 @@ function deg2rad(deg) {
   return deg * (Math.PI / 180);
 }
 
-// Register service worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js')
     .then(() => console.log("Service Worker înregistrat"))
